@@ -1,11 +1,15 @@
+//
+// This program remuxes from a given RTSP input to an mp4 container.
+//
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <videostreamer.h>
 
-int main(const int argc, const char * const argv)
+int main(const int argc, const char * const * const argv)
 {
 	if (argc != 2) {
-		printf("Usage: %s <rtsp URL>\n", argv[0]);
+		printf("Usage: %s <RTSP URL>\n", argv[0]);
 		return 1;
 	}
 

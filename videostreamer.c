@@ -1,4 +1,10 @@
 //
+// This library provides remuxing from a video stream (such as an RTSP
+// URL) to an MP4 container. It writes a fragmented MP4 so that it can be
+// streamed to a pipe.
+//
+// There is no re-encoding. The stream is copied as is.
+//
 // The logic here is heavily based on remuxing.c by Stefano Sabatini.
 //
 
@@ -13,7 +19,6 @@
 static void
 __vs_log_packet(const AVFormatContext * const,
 		const AVPacket * const, const char * const);
-
 
 void
 vs_setup(void)
