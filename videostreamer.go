@@ -250,27 +250,34 @@ func videoEncoder(outPipe *os.File, inputFormat, inputURL string,
 	stopChan <-chan struct{}, doneChan chan<- struct{}, frameChan chan<- int) {
 	inputFormatC := C.CString(inputFormat)
 	inputURLC := C.CString(inputURL)
-	outputFormatC := C.CString("mp4")
-	outputURLC := C.CString(fmt.Sprintf("pipe:%d", outPipe.Fd()))
 	verbose := C.bool(true)
 
-	vs := C.vs_open(inputFormatC, inputURLC, outputFormatC, outputURLC, verbose)
-	if vs == nil {
+	input := C.vs_open_input(inputFormatC, inputURLC, verbose)
+	if input == nil {
 		log.Printf("Unable to open input")
 		C.free(unsafe.Pointer(inputFormatC))
 		C.free(unsafe.Pointer(inputURLC))
-		C.free(unsafe.Pointer(outputFormatC))
-		C.free(unsafe.Pointer(outputURLC))
 		doneChan <- struct{}{}
 		return
 	}
 	C.free(unsafe.Pointer(inputFormatC))
 	C.free(unsafe.Pointer(inputURLC))
+	defer C.vs_destroy_input(input)
+
+	outputFormatC := C.CString("mp4")
+	outputURLC := C.CString(fmt.Sprintf("pipe:%d", outPipe.Fd()))
+
+	output := C.vs_open_output(outputFormatC, outputURLC, input, verbose)
+	if output == nil {
+		log.Printf("Unable to open output")
+		C.free(unsafe.Pointer(outputFormatC))
+		C.free(unsafe.Pointer(outputURLC))
+		doneChan <- struct{}{}
+		return
+	}
 	C.free(unsafe.Pointer(outputFormatC))
 	C.free(unsafe.Pointer(outputURLC))
-	defer C.vs_destroy(vs)
-
-	frameChan <- 792
+	defer C.vs_destroy_output(output)
 
 	for {
 		select {
@@ -282,21 +289,33 @@ func videoEncoder(outPipe *os.File, inputFormat, inputURL string,
 		default:
 		}
 
-		frameSize := C.int(0)
-		frameSize = C.vs_read_write(vs, verbose)
-		if frameSize == -1 {
-			log.Printf("Failure decoding/encoding")
+		var pkt C.AVPacket
+		readRes := C.int(0)
+		readRes = C.vs_read_packet(input, &pkt, verbose)
+		if readRes == -1 {
+			log.Printf("Failure reading")
 			doneChan <- struct{}{}
 			return
 		}
 
-		// We did some work.
-
-		log.Printf("frame size %d", frameSize)
-
-		if frameSize > 0 {
-			frameChan <- int(frameSize)
+		if readRes == 0 {
+			continue
 		}
+
+		writeRes := C.int(0)
+		writeRes = C.vs_write_packet(input, output, &pkt, verbose)
+		if writeRes == -1 {
+			log.Printf("Failure writing")
+			C.av_packet_unref(&pkt)
+			doneChan <- struct{}{}
+			return
+		}
+
+		pktSize := int(pkt.size)
+
+		C.av_packet_unref(&pkt)
+
+		frameChan <- int(pktSize)
 	}
 }
 

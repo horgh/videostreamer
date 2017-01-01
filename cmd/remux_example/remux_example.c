@@ -21,10 +21,18 @@ int main(const int argc, const char * const * const argv)
 	const char * const output_url = "file:/tmp/out.mp4";
 	const bool verbose = true;
 
-	struct Videostreamer * const vs = vs_open(input_format, input_url,
-			output_format, output_url, verbose);
-	if (!vs) {
-		printf("unable to open videostreamer\n");
+	struct VSInput * const input = vs_open_input(input_format, input_url,
+			verbose);
+	if (!input) {
+		printf("unable to open input\n");
+		return 1;
+	}
+
+	struct VSOutput * const output = vs_open_output(output_format, output_url,
+			input, verbose);
+	if (!output) {
+		printf("unable to open output\n");
+		vs_destroy_input(input);
 		return 1;
 	}
 
@@ -32,14 +40,31 @@ int main(const int argc, const char * const * const argv)
 	int i = 0;
 
 	while (1) {
-		const int frame_size = vs_read_write(vs, verbose);
-		if (frame_size == -1) {
-			printf("read/write failed\n");
-			vs_destroy(vs);
+		AVPacket pkt;
+		memset(&pkt, 0, sizeof(AVPacket));
+
+		const int read_res = vs_read_packet(input, &pkt, verbose);
+		if (read_res == -1) {
+			printf("read failed\n");
+			vs_destroy_input(input);
+			vs_destroy_output(output);
 			return 1;
 		}
 
-		printf("frame size %d\n", frame_size);
+		if (read_res == 0) {
+			continue;
+		}
+
+		const int write_res = vs_write_packet(input, output, &pkt, verbose);
+		if (write_res == -1) {
+			printf("write failed\n");
+			vs_destroy_input(input);
+			vs_destroy_output(output);
+			av_packet_unref(&pkt);
+			return 1;
+		}
+
+		av_packet_unref(&pkt);
 
 		i++;
 		if (i == max_frames) {
@@ -47,7 +72,8 @@ int main(const int argc, const char * const * const argv)
 		}
 	}
 
-	vs_destroy(vs);
+	vs_destroy_input(input);
+	vs_destroy_output(output);
 
 	return 0;
 }
