@@ -1,7 +1,7 @@
 //
-// This library provides remuxing from a video stream (such as an RTSP
-// URL) to an MP4 container. It writes a fragmented MP4 so that it can be
-// streamed to a pipe.
+// This library provides remuxing from a video stream (such as an RTSP URL) to
+// an MP4 container. It writes a fragmented MP4 so that it can be streamed to a
+// pipe.
 //
 // There is no re-encoding. The stream is copied as is.
 //

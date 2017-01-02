@@ -37,8 +37,8 @@ type HTTPHandler struct {
 
 // Client is servicing one HTTP client.
 type Client struct {
-	// packetWriter goroutine writes out video packets to this pipe. HTTP goroutine
-	// reads from the read side.
+	// packetWriter goroutine writes out video packets to this pipe. HTTP
+	// goroutine reads from the read side.
 	OutPipe *os.File
 
 	// Reference to a media output context. Through this, the packetWriter
@@ -234,8 +234,8 @@ func cleanupClient(client *Client) {
 		// Note one may think that draining both here and in the packetWriter could
 		// lead to the unfortunate likelihood that the client will receive some
 		// packets but not others, leading to corruption. But since we closed the
-		// write side of the pipe above, this will not happen. No further packets will
-		// be reaching the client.
+		// write side of the pipe above, this will not happen. No further packets
+		// will be reaching the client.
 		for pkt := range client.PacketChan {
 			C.av_packet_free(&pkt)
 		}
@@ -266,8 +266,8 @@ func openInput(inputFormat, inputURL string, verbose bool) *C.struct_VSInput {
 func writePacketToClients(input *C.struct_VSInput, pkt *C.AVPacket,
 	clients []*Client, verbose bool) []*Client {
 	// Rewrite clients slice with only those we succeeded in writing to. If we
-	// failed for some reason we clean up the client and no longer send it anything
-	// further.
+	// failed for some reason we clean up the client and no longer send it
+	// anything further.
 	clients2 := []*Client{}
 
 	for _, client := range clients {
@@ -282,11 +282,12 @@ func writePacketToClients(input *C.struct_VSInput, pkt *C.AVPacket,
 				continue
 			}
 
-			// We pass packets to the client via this channel. We give each client its
-			// own goroutine for the purposes of receiving these packets and writing them
-			// to the write side of the pipe. We do it this way rather than directly here
-			// because we do not want the encoder to block waiting on a write to the
-			// write side of the pipe because there is a slow HTTP client.
+			// We pass packets to the client via this channel. We give each client
+			// its own goroutine for the purposes of receiving these packets and
+			// writing them to the write side of the pipe. We do it this way rather
+			// than directly here because we do not want the encoder to block waiting
+			// on a write to the write side of the pipe because there is a slow HTTP
+			// client.
 			client.PacketChan = make(chan *C.AVPacket, 32)
 
 			go packetWriter(client, input, verbose)
