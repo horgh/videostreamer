@@ -93,6 +93,7 @@ vs_open_input(const char * const input_format_name,
 
 		// I take the first video stream only.
 		input->video_stream_index = (int) i;
+
 		break;
 	}
 
@@ -330,10 +331,27 @@ vs_write_packet(const struct VSInput * const input,
 	AVStream * const in_stream  = input->format_ctx->streams[pkt->stream_index];
 	AVStream * const out_stream = output->format_ctx->streams[pkt->stream_index];
 
-	pkt->pts = av_rescale_q_rnd(pkt->pts, in_stream->time_base,
-			out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
-	pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base,
-			out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+	// Set pts/dts if not set. Otherwise we will receive warnings like
+	//
+	// [mp4 @ 0x55688397bc40] Timestamps are unset in a packet for stream 0. This
+	// is deprecated and will stop working in the future. Fix your code to set
+	// the timestamps properly
+	//
+	// [mp4 @ 0x55688397bc40] Encoder did not produce proper pts, making some up.
+	if (pkt->pts == AV_NOPTS_VALUE) {
+		pkt->pts = 0;
+	} else {
+		pkt->pts = av_rescale_q_rnd(pkt->pts, in_stream->time_base,
+				out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+	}
+
+	if (pkt->dts == AV_NOPTS_VALUE) {
+		pkt->dts = 0;
+	} else {
+		pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base,
+				out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+	}
+
 	pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base,
 			out_stream->time_base);
 	pkt->pos = -1;
