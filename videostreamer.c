@@ -239,6 +239,8 @@ vs_open_output(const char * const output_format_name,
 	av_dict_free(&opts);
 
 
+	output->last_dts = 0;
+
 	return output;
 }
 
@@ -319,8 +321,7 @@ vs_read_packet(const struct VSInput * input, AVPacket * const pkt,
 // 1 if we wrote the packet
 int
 vs_write_packet(const struct VSInput * const input,
-		const struct VSOutput * const output, AVPacket * const pkt,
-		const bool verbose)
+		struct VSOutput * const output, AVPacket * const pkt, const bool verbose)
 {
 	if (!input || !output || !pkt) {
 		printf("%s\n", strerror(EINVAL));
@@ -357,6 +358,45 @@ vs_write_packet(const struct VSInput * const input,
 		return -1;
 	}
 
+	// It is possible that the input is not well formed. Its dts (decompression
+	// timestamp) may fluctuate. av_write_frame() says that the dts must be
+	// strictly increasing.
+	//
+	// Packets from such inputs might look like:
+	//
+	// in: pts:18750 pts_time:0.208333 dts:18750 dts_time:0.208333 duration:3750 duration_time:0.0416667 stream_index:1
+	// in: pts:0 pts_time:0 dts:0 dts_time:0 duration:3750 duration_time:0.0416667 stream_index:1
+	//
+	// dts here is 18750 and then 0.
+	//
+	// If we try to write the second packet as is, we'll see this error:
+	// [mp4 @ 0x10f1ae0] Application provided invalid, non monotonically increasing dts to muxer in stream 1: 18750 >= 0
+	//
+	// This is apparently a fairly common problem. In ffmpeg.c (as of ffmpeg
+	// 3.2.4 at least) there is logic to rewrite the dts and warn if it happens.
+	// Let's do the same. Note my logic is a little different here.
+	if (pkt->dts != AV_NOPTS_VALUE && output->last_dts != AV_NOPTS_VALUE &&
+			pkt->dts < output->last_dts) {
+		int64_t const next_dts = output->last_dts+1;
+
+		if (verbose) {
+			printf("Warning: Non-monotonous DTS in input stream. Previous: %" PRId64 " current: %" PRId64 ". changing to %" PRId64 ".\n",
+					output->last_dts, pkt->dts, next_dts);
+		}
+
+		// We also apparently (ffmpeg.c does this too) need to update the pts.
+		// Otherwise we see an error like:
+		//
+		// [mp4 @ 0x555e6825ea60] pts (3780) < dts (22531) in stream 0
+
+		if (pkt->pts != AV_NOPTS_VALUE && pkt->pts >= pkt->dts) {
+			pkt->pts = FFMAX(pkt->pts, next_dts);
+		}
+
+		pkt->dts = next_dts;
+	}
+
+
 	// Set pts/dts if not set. Otherwise we will receive warnings like
 	//
 	// [mp4 @ 0x55688397bc40] Timestamps are unset in a packet for stream 0. This
@@ -386,6 +426,10 @@ vs_write_packet(const struct VSInput * const input,
 	if (verbose) {
 		__vs_log_packet(output->format_ctx, pkt, "out");
 	}
+
+
+	// Track last dts we see (see where we use it for why).
+	output->last_dts = pkt->dts;
 
 
 	// Write encoded frame (as a packet).

@@ -3,6 +3,7 @@
 
 #include <libavformat/avformat.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 struct VSInput {
 	AVFormatContext * format_ctx;
@@ -11,6 +12,13 @@ struct VSInput {
 
 struct VSOutput {
 	AVFormatContext * format_ctx;
+
+  // Track the last dts we output. We use it to double check that dts is
+  // monotonic.
+  //
+  // I am not sure if it is available anywhere already. I tried
+  // AVStream->info->last_dts and that is apparently not set.
+  int64_t last_dts;
 };
 
 void
@@ -37,7 +45,6 @@ vs_read_packet(const struct VSInput *, AVPacket * const,
 
 int
 vs_write_packet(const struct VSInput * const,
-		const struct VSOutput * const, AVPacket * const,
-		const bool);
+		struct VSOutput * const, AVPacket * const, const bool);
 
 #endif
