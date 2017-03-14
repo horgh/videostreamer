@@ -91,9 +91,7 @@ vs_open_input(const char * const input_format_name,
 			continue;
 		}
 
-		// I take the first video stream only.
 		input->video_stream_index = (int) i;
-
 		break;
 	}
 
@@ -296,7 +294,8 @@ vs_read_packet(const struct VSInput * input, AVPacket * const pkt,
 
 	if (pkt->stream_index != input->video_stream_index) {
 		if (verbose) {
-			printf("skipping non video packet\n");
+			printf("skipping packet from input stream %d, our video is from stream %d\n",
+					pkt->stream_index, input->video_stream_index);
 		}
 
 		av_packet_unref(pkt);
@@ -317,7 +316,7 @@ vs_read_packet(const struct VSInput * input, AVPacket * const pkt,
 //
 // Returns:
 // -1 if error
-// 1 if wrote packet
+// 1 if we wrote the packet
 int
 vs_write_packet(const struct VSInput * const input,
 		const struct VSOutput * const output, AVPacket * const pkt,
@@ -329,7 +328,34 @@ vs_write_packet(const struct VSInput * const input,
 	}
 
 	AVStream * const in_stream  = input->format_ctx->streams[pkt->stream_index];
+	if (!in_stream) {
+		printf("input stream not found with stream index %d\n", pkt->stream_index);
+		return -1;
+	}
+
+
+	// If there are multiple input streams, then the stream index on the packet
+	// may not match the stream index in our output. We need to ensure the index
+	// matches. Note by this point we have checked that it is indeed a packet
+	// from the stream we want (we do this when reading the packet).
+	//
+	// As we only ever have a single output stream (one, video), the index will
+	// be 0.
+	if (pkt->stream_index != 0) {
+		if (verbose) {
+			printf("updating packet stream index to 0 (from %d)\n",
+					pkt->stream_index);
+		}
+
+		pkt->stream_index = 0;
+	}
+
+
 	AVStream * const out_stream = output->format_ctx->streams[pkt->stream_index];
+	if (!out_stream) {
+		printf("output stream not found with stream index %d\n", pkt->stream_index);
+		return -1;
+	}
 
 	// Set pts/dts if not set. Otherwise we will receive warnings like
 	//
