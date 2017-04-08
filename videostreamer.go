@@ -143,6 +143,7 @@ func encoder(inputFormat, inputURL string, verbose bool,
 	for {
 		// If there are no clients, then block waiting for one.
 		if len(clients) == 0 {
+			log.Printf("encoder: Waiting for clients...")
 			client := <-clientChan
 			log.Printf("encoder: New client")
 			clients = append(clients, client)
@@ -152,7 +153,13 @@ func encoder(inputFormat, inputURL string, verbose bool,
 		// There is at least one client.
 
 		// Get any new clients, but don't block.
+		clientCountBefore := len(clients)
 		clients = acceptClients(clientChan, clients)
+		clientCountAfter := len(clients)
+
+		if clientCountBefore != clientCountAfter {
+			log.Printf("encoder: %d clients", clientCountAfter)
+		}
 
 		// Open the input if it is not open yet.
 		if input == nil {
@@ -184,7 +191,13 @@ func encoder(inputFormat, inputURL string, verbose bool,
 		}
 
 		// Write the packet to all clients.
+		clientCountBefore = len(clients)
 		clients = writePacketToClients(input, &pkt, clients, verbose)
+		clientCountAfter = len(clients)
+
+		if clientCountBefore != clientCountAfter {
+			log.Printf("encoder: %d clients", clientCountAfter)
+		}
 
 		C.av_packet_unref(&pkt)
 
@@ -192,6 +205,7 @@ func encoder(inputFormat, inputURL string, verbose bool,
 		if len(clients) == 0 {
 			C.vs_destroy_input(input)
 			input = nil
+			log.Printf("encoder: Closed input")
 		}
 	}
 }

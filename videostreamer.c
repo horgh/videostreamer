@@ -436,8 +436,12 @@ vs_write_packet(const struct VSInput * const input,
 
 	// av_interleaved_write_frame() works too, but I don't think it is needed.
 	// Using av_write_frame() skips buffering.
-	if (av_write_frame(output->format_ctx, pkt) != 0) {
-		printf("unable to write frame\n");
+	const int write_res = av_write_frame(output->format_ctx, pkt);
+	if (write_res != 0) {
+		char error_buf[256];
+		memset(error_buf, 0, 256);
+		av_strerror(write_res, error_buf, 256);
+		printf("unable to write frame: %s\n", error_buf);
 		return -1;
 	}
 
