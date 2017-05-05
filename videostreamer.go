@@ -409,6 +409,10 @@ func (h HTTPHandler) streamRequest(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Content-Type", "video/mp4")
 	rw.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 
+	// Apparently this can help Chrome. Although I have not seen issues without
+	// it.
+	rw.Header().Set("Accept-Ranges", "bytes")
+
 	// We send chunked by default
 
 	for {

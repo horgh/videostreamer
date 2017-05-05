@@ -58,12 +58,33 @@ vs_open_input(const char * const input_format_name,
 		return NULL;
 	}
 
-	if (avformat_open_input(&input->format_ctx, input_url, input_format,
-				NULL) != 0) {
-		printf("unable to open input\n");
+	// Set rtsp_transport to udp. Whether this makes any real difference I'm not
+	// sure. I am debugging a lag/freeze issue.
+	AVDictionary * opts = NULL;
+	if (av_dict_set(&opts, "rtsp_transport", "udp", 0) < 0) {
+		printf("unable to set rtsp_transport opt\n");
 		vs_destroy_input(input);
 		return NULL;
 	}
+
+	if (avformat_open_input(&input->format_ctx, input_url, input_format,
+				&opts) != 0) {
+		printf("unable to open input\n");
+		vs_destroy_input(input);
+		av_dict_free(&opts);
+		return NULL;
+	}
+
+	// Check that all options were found. If one wasn't then it will be returned
+	// and in the options.
+	if (av_dict_count(opts) != 0) {
+		printf("some options not set\n");
+		vs_destroy_input(input);
+		av_dict_free(&opts);
+		return NULL;
+	}
+
+	av_dict_free(&opts);
 
 	if (avformat_find_stream_info(input->format_ctx, NULL) < 0) {
 		printf("failed to find stream info\n");
@@ -147,6 +168,11 @@ vs_open_output(const char * const output_format_name,
 		return NULL;
 	}
 
+	// Try setting this option, again for lag/freezing issues. Although I am
+	// primarily trying to set the AV_CODEC_FLAG_GLOBAL_HEADER, so I don't know
+	// if this is applicable.
+	output_format->flags |= AVFMT_GLOBALHEADER;
+
 	if (avformat_alloc_output_context2(&output->format_ctx, output_format,
 				NULL, NULL) < 0) {
 		printf("unable to create output context\n");
@@ -174,6 +200,34 @@ vs_open_output(const char * const output_format_name,
 		return NULL;
 	}
 
+	// I want to set a codec context flag. We can't do it directly to
+	// out_stream->codec as that is deprecated. Instead, allocate a codec context,
+	// copy the parameters, set the flag, then copy the codec context back to
+	// parameters. I'm not sure this is the correct way!
+
+	AVCodecContext * codec_ctx = avcodec_alloc_context3(NULL);
+	if (NULL == codec_ctx) {
+		printf("unable to allocate codec context\n");
+		vs_destroy_output(output);
+		return NULL;
+	}
+
+	if (avcodec_parameters_to_context(codec_ctx, out_stream->codecpar) < 0) {
+		printf("unable to copy codec parameters to codec context");
+		vs_destroy_output(output);
+		avcodec_free_context(&codec_ctx);
+		return NULL;
+	}
+
+	codec_ctx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
+
+	if (avcodec_parameters_from_context(out_stream->codecpar, codec_ctx) < 0) {
+		printf("unable to copy codec context to codec parameters");
+		vs_destroy_output(output);
+		return NULL;
+	}
+
+	avcodec_free_context(&codec_ctx);
 
 	if (verbose) {
 		av_dump_format(output->format_ctx, 0, output_url, 1);
@@ -358,6 +412,74 @@ vs_write_packet(const struct VSInput * const input,
 		return -1;
 	}
 
+	// Try using -bsf dump_extra. This is again trying to address lag/halting
+	// issues.
+
+	// TODO: We could keep a single bsf context around the entire time.
+	const AVBitStreamFilter * const bsf = av_bsf_get_by_name("dump_extra");
+	if (NULL == bsf) {
+		printf("unable to find bitstreamfilter dump_extra\n");
+		return -1;
+	}
+
+	AVBSFContext * bsf_ctx = NULL;
+	if (av_bsf_alloc(bsf, &bsf_ctx) < 0) {
+		printf("unable to allocate bsf context\n");
+		return -1;
+	}
+
+	if (avcodec_parameters_copy(bsf_ctx->par_in, out_stream->codecpar) < 0) {
+		printf("unable to copy codec parameters (bsf input)\n");
+		av_bsf_free(&bsf_ctx);
+		return -1;
+	}
+	if (avcodec_parameters_copy(bsf_ctx->par_out, out_stream->codecpar) < 0) {
+		printf("unable to copy codec parameters (bsf output)\n");
+		av_bsf_free(&bsf_ctx);
+		return -1;
+	}
+
+	if (av_bsf_init(bsf_ctx) != 0) {
+		printf("unable to init bsf context\n");
+		av_bsf_free(&bsf_ctx);
+		return -1;
+	}
+
+	// The BSF takes ownership of the packet. Since we don't have ownership here
+	// ourselves, clone it first.
+	AVPacket * pkt2 = av_packet_clone(pkt);
+	if (NULL == pkt2) {
+		printf("unable to clone packet\n");
+		av_bsf_free(&bsf_ctx);
+		return -1;
+	}
+
+	if (av_bsf_send_packet(bsf_ctx, pkt2) != 0) {
+		printf("unable to send packet to bsf context\n");
+		av_bsf_free(&bsf_ctx);
+		return -1;
+	}
+
+	if (av_bsf_receive_packet(bsf_ctx, pkt2) != 0) {
+		printf("unable to retrieve packet from bsf context\n");
+		av_bsf_free(&bsf_ctx);
+		return -1;
+	}
+
+	// TODO: There may be multiple packets to retrieve. We should fully drain the
+	// bsf.
+
+	// Signal we won't send any more packets.
+	if (av_bsf_send_packet(bsf_ctx, NULL) != 0) {
+		printf("unable to tell bsf context that no more packets will be sent\n");
+		av_bsf_free(&bsf_ctx);
+		return -1;
+	}
+
+	// TODO: After signaling no more packets, we should ensure we drain the bsf.
+
+	av_bsf_free(&bsf_ctx);
+
 	// It is possible that the input is not well formed. Its dts (decompression
 	// timestamp) may fluctuate. av_write_frame() says that the dts must be
 	// strictly increasing.
@@ -375,13 +497,13 @@ vs_write_packet(const struct VSInput * const input,
 	// This is apparently a fairly common problem. In ffmpeg.c (as of ffmpeg
 	// 3.2.4 at least) there is logic to rewrite the dts and warn if it happens.
 	// Let's do the same. Note my logic is a little different here.
-	if (pkt->dts != AV_NOPTS_VALUE && output->last_dts != AV_NOPTS_VALUE &&
-			pkt->dts < output->last_dts) {
+	if (pkt2->dts != AV_NOPTS_VALUE && output->last_dts != AV_NOPTS_VALUE &&
+			pkt2->dts < output->last_dts) {
 		int64_t const next_dts = output->last_dts+1;
 
 		if (verbose) {
 			printf("Warning: Non-monotonous DTS in input stream. Previous: %" PRId64 " current: %" PRId64 ". changing to %" PRId64 ".\n",
-					output->last_dts, pkt->dts, next_dts);
+					output->last_dts, pkt2->dts, next_dts);
 		}
 
 		// We also apparently (ffmpeg.c does this too) need to update the pts.
@@ -389,11 +511,11 @@ vs_write_packet(const struct VSInput * const input,
 		//
 		// [mp4 @ 0x555e6825ea60] pts (3780) < dts (22531) in stream 0
 
-		if (pkt->pts != AV_NOPTS_VALUE && pkt->pts >= pkt->dts) {
-			pkt->pts = FFMAX(pkt->pts, next_dts);
+		if (pkt2->pts != AV_NOPTS_VALUE && pkt2->pts >= pkt2->dts) {
+			pkt2->pts = FFMAX(pkt2->pts, next_dts);
 		}
 
-		pkt->dts = next_dts;
+		pkt2->dts = next_dts;
 	}
 
 
@@ -404,39 +526,42 @@ vs_write_packet(const struct VSInput * const input,
 	// the timestamps properly
 	//
 	// [mp4 @ 0x55688397bc40] Encoder did not produce proper pts, making some up.
-	if (pkt->pts == AV_NOPTS_VALUE) {
-		pkt->pts = 0;
+	if (pkt2->pts == AV_NOPTS_VALUE) {
+		pkt2->pts = 0;
 	} else {
-		pkt->pts = av_rescale_q_rnd(pkt->pts, in_stream->time_base,
+		pkt2->pts = av_rescale_q_rnd(pkt2->pts, in_stream->time_base,
 				out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
 	}
 
-	if (pkt->dts == AV_NOPTS_VALUE) {
-		pkt->dts = 0;
+	if (pkt2->dts == AV_NOPTS_VALUE) {
+		pkt2->dts = 0;
 	} else {
-		pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base,
+		pkt2->dts = av_rescale_q_rnd(pkt2->dts, in_stream->time_base,
 				out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
 	}
 
-	pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base,
+	pkt2->duration = av_rescale_q(pkt2->duration, in_stream->time_base,
 			out_stream->time_base);
-	pkt->pos = -1;
+	pkt2->pos = -1;
 
 
 	if (verbose) {
-		__vs_log_packet(output->format_ctx, pkt, "out");
+		__vs_log_packet(output->format_ctx, pkt2, "out");
 	}
 
 
 	// Track last dts we see (see where we use it for why).
-	output->last_dts = pkt->dts;
+	output->last_dts = pkt2->dts;
 
 
 	// Write encoded frame (as a packet).
 
 	// av_interleaved_write_frame() works too, but I don't think it is needed.
 	// Using av_write_frame() skips buffering.
-	const int write_res = av_write_frame(output->format_ctx, pkt);
+	const int write_res = av_write_frame(output->format_ctx, pkt2);
+
+	av_packet_unref(pkt2);
+
 	if (write_res != 0) {
 		char error_buf[256];
 		memset(error_buf, 0, 256);
