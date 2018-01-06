@@ -1,0 +1,3 @@
+*.swp
+cmd/remux_example/remux_example
+videostreamer
