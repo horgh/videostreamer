@@ -7,23 +7,25 @@ input), is not accessible via HTTP, or is not easily embeddable in a
 website.
 
 
-## Requirements
-* ffmpeg (libavcodec, libavformat, libavdevice, libavutil, libswresample). I
-  developed using 3.2.2. On Debian this is in the package `libavutil-dev`.
-  * It does work with 3.0.x or earlier version as it depends on newer APIs.
-    I'm not sure whether it works with 3.1.x
-* C compiler. I developed using gcc 6.2.1. Currently videostreamer requires
-  a compiler with C11 support.
-* Go. I developed using 1.7.3. It should work with any Go 1 version 1.7.3+
-  (and probably earlier versions too).
+## Build requirements
+* ffmpeg libraries (libavcodec, libavformat, libavdevice, libavutil,
+  libswresample).
+  * It should work with versions 3.2.x or later.
+  * It does not work with 3.0.x or earlier as it depends on new APIs.
+  * I'm not sure whether it works with 3.1.x.
+* C compiler. Currently it requires a compiler with C11 support.
+* Go. It should work with any Go 1 version.
 
 
 ## Installation
-* Install the ffmpeg libraries and a C compiler.
-  * On Debian/Ubuntu you need to install `libavutil-dev`
+* Install the build dependencies (including ffmpeg libraries and a C
+  compiler).
+  * On Debian/Ubuntu, these packages should include what you need:
+    `git-core pkg-config libavutil-dev libavcodec-dev libavformat-dev
+    libavdevice-dev`
 * Build the daemon.
   * You need a working Go build environment.
-  * Once you have one, run: `go get github.com/horgh/videostreamer`
+  * Run `go get github.com/horgh/videostreamer`
   * This places the `videostreamer` binary at `$GOPATH/bin/videostreamer`.
 * Place index.html somewhere accessible. Update the `<video>` element src
   attribute.
