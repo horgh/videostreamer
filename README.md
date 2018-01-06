@@ -8,44 +8,52 @@ website.
 
 
 ## Requirements
-  * ffmpeg (libavcodec, libavformat, libavdevice, libavutil, libswresample). I
-    developed using 3.2.2. On Debian this is in the package libavutil-dev.
-  * C compiler. I developed using gcc 6.2.1.
-  * Go. I developed using 1.7.3.
+* ffmpeg (libavcodec, libavformat, libavdevice, libavutil, libswresample). I
+  developed using 3.2.2. On Debian this is in the package `libavutil-dev`.
+  * It does work with 3.0.x or earlier version as it depends on newer APIs.
+    I'm not sure whether it works with 3.1.x
+* C compiler. I developed using gcc 6.2.1. Currently videostreamer requires
+  a compiler with C11 support.
+* Go. I developed using 1.7.3. It should work with any Go 1 version 1.7.3+
+  (and probably earlier versions too).
 
 
 ## Installation
-  * go get github.com/horgh/videostreamer
-  * go build
-  * Place index.html somewhere accessible. Update the `<video>` element src
-    attribute.
-  * Run the daemon. Its usage output shows the possible flags. There is no
-    configuration file.
+* Install the ffmpeg libraries and a C compiler.
+  * On Debian/Ubuntu you need to install `libavutil-dev`
+* Build the daemon.
+  * You need a working Go build environment.
+  * Once you have one, run: `go get github.com/horgh/videostreamer`
+  * This places the `videostreamer` binary at `$GOPATH/bin/videostreamer`.
+* Place index.html somewhere accessible. Update the `<video>` element src
+  attribute.
+* Run the daemon. Its usage output shows the possible flags. There is no
+  configuration file.
 
 
 ## Components
-  * videostreamer: A daemon. The main component of the project.
-  * index.html: A small sample website with a `<video>` element which
-    demonstrates how to stream from the daemon.
-  * videostreamer.h: A library using the ffmpeg libraries to read a video input
-    and remux and write to another format.
-  * cmd/remux_example: A C program demonstrating using videostreamer.h. It
-    remuxes from a given RTSP input to an MP4 file.
+* `videostreamer`: The daemon.
+* `index.html`: A small sample website with a `<video>` element which
+  demonstrates how to stream from the daemon.
+* `videostreamer.h`: A library using the ffmpeg libraries to read a video
+  input and remux and write to another format.
+* `cmd/remux_example`: A C program demonstrating using `videostreamer.h`.
+  It remuxes an RTSP input to an MP4 file.
 
 
 ## Background
 A friend has a camera that publishes an RTSP feed containing h264 video. It
 permits a limited number of connections, and being RTSP is not easily
-accessible on the web, such as in a regular HTML5 `<video>` element.
-videostreamer solves both of these problems. It reads the RTSP feed as input,
-remuxes the h264 video into an MP4 container, and streams it to HTTP clients.
-No matter how many clients are streaming the video, videostreamer only opens
-one RTSP connection.
+accessible on the web, such as in an HTML5 `<video>` element. videostreamer
+solves both of these problems. It reads the RTSP feed as input, remuxes the
+h264 video into an MP4 container, and streams it to HTTP clients. No matter
+how many clients are streaming the video, videostreamer only opens one RTSP
+connection.
 
-Happily, browsers support h264 in an MP4 container, so no transcoding is
-necessary. However, in order to stream the MP4, it is fragmented using
-libavformat's `frag_keyframe` option. I found that for Firefox I also had to
-set the `empty_moov` option.
+Browsers support h264 in an MP4 container, so no transcoding is necessary.
+However, in order to stream the MP4, it is fragmented using libavformat's
+`frag_keyframe` option. For Firefox I also had to set the `empty_moov`
+option.
 
 
 # Difference from audiostreamer
