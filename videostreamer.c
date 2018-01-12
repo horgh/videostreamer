@@ -376,7 +376,7 @@ vs_write_packet(const struct VSInput * const input,
 	// 3.2.4 at least) there is logic to rewrite the dts and warn if it happens.
 	// Let's do the same. Note my logic is a little different here.
 	if (pkt->dts != AV_NOPTS_VALUE && output->last_dts != AV_NOPTS_VALUE &&
-			pkt->dts < output->last_dts) {
+			pkt->dts <= output->last_dts) {
 		int64_t const next_dts = output->last_dts+1;
 
 		if (verbose) {
