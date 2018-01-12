@@ -1,6 +1,4 @@
-//
 // This program remuxes from a given RTSP input to an mp4 container.
-//
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -8,17 +6,21 @@
 
 int main(const int argc, const char * const * const argv)
 {
-	if (argc != 2) {
-		printf("Usage: %s <RTSP URL>\n", argv[0]);
+	if (argc != 4) {
+		printf("Usage: %s <input RTSP URL> <output mp4 file> <max frames>\n",
+				argv[0]);
 		return 1;
 	}
+	char const * const output_filename = argv[2];
+	long long const max_frames = atoll(argv[3]);
 
 	vs_setup();
 
 	const char * const input_format = "rtsp";
 	const char * const input_url = argv[1];
 	const char * const output_format = "mp4";
-	const char * const output_url = "file:/tmp/out.mp4";
+	char output_url[4096] = {0};
+	sprintf(output_url, "file:%s", output_filename);
 	const bool verbose = true;
 
 	struct VSInput * const input = vs_open_input(input_format, input_url,
@@ -36,8 +38,7 @@ int main(const int argc, const char * const * const argv)
 		return 1;
 	}
 
-	const int max_frames = 100;
-	int i = 0;
+	long long i = 0;
 
 	while (1) {
 		AVPacket pkt;
