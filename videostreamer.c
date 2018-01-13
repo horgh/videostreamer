@@ -239,7 +239,7 @@ vs_open_output(const char * const output_format_name,
 	av_dict_free(&opts);
 
 
-	output->last_dts = 0;
+	output->last_dts = AV_NOPTS_VALUE;
 
 	return output;
 }
@@ -375,8 +375,18 @@ vs_write_packet(const struct VSInput * const input,
 	// This is apparently a fairly common problem. In ffmpeg.c (as of ffmpeg
 	// 3.2.4 at least) there is logic to rewrite the dts and warn if it happens.
 	// Let's do the same. Note my logic is a little different here.
-	if (pkt->dts != AV_NOPTS_VALUE && output->last_dts != AV_NOPTS_VALUE &&
-			pkt->dts <= output->last_dts) {
+	bool fix_dts = pkt->dts != AV_NOPTS_VALUE &&
+		output->last_dts != AV_NOPTS_VALUE &&
+		pkt->dts <= output->last_dts;
+
+	// It is also possible for input streams to include a packet with
+	// dts/pts=NOPTS after packets with dts/pts set. These won't be caught by the
+	// prior case. If we try to send these to the encoder however, we'll generate
+	// the same error (non monotonically increasing DTS) since the output packet
+	// will have dts/pts=0.
+	fix_dts |= pkt->dts == AV_NOPTS_VALUE && output->last_dts != AV_NOPTS_VALUE;
+
+	if (fix_dts) {
 		int64_t const next_dts = output->last_dts+1;
 
 		if (verbose) {
@@ -391,6 +401,11 @@ vs_write_packet(const struct VSInput * const input,
 
 		if (pkt->pts != AV_NOPTS_VALUE && pkt->pts >= pkt->dts) {
 			pkt->pts = FFMAX(pkt->pts, next_dts);
+		}
+		// In the case where pkt->dts was AV_NOPTS_VALUE, pkt->pts can be
+		// AV_NOPTS_VALUE too which we fix as well.
+		if (pkt->pts == AV_NOPTS_VALUE) {
+			pkt->pts = next_dts;
 		}
 
 		pkt->dts = next_dts;
