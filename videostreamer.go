@@ -349,7 +349,7 @@ func writePacketToClients(input *Input, pkt *C.AVPacket,
 			continue
 		}
 
-		// Pass the client to a goroutine that writes it to this client.
+		// Pass the packet to a goroutine that writes it to this client.
 		select {
 		case client.PacketChan <- pktCopy:
 		default:
