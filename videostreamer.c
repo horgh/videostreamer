@@ -323,7 +323,11 @@ int
 vs_write_packet(const struct VSInput * const input,
 		struct VSOutput * const output, AVPacket * const pkt, const bool verbose)
 {
-	if (!input || !output || !pkt) {
+	// input validation, most notably the input streams can sometimes
+	// be empty, causing out-of-bounds errors below
+	if (!input || !input->format_ctx || !input->format_ctx->streams
+          || !output || !pkt || pkt->stream_index < 0) {
+
 		printf("%s\n", strerror(EINVAL));
 		return -1;
 	}
@@ -426,12 +430,14 @@ vs_write_packet(const struct VSInput * const input,
 				out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
 	}
 
-	if (pkt->dts == AV_NOPTS_VALUE) {
-		pkt->dts = 0;
-	} else {
-		pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base,
-				out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
-	}
+	// TODO: is this duplicated? or is there a chance pkt->dts still
+	//       has improper PTS?
+	//if (pkt->dts == AV_NOPTS_VALUE) {
+	//	pkt->dts = 0;
+	//} else {
+	//	pkt->dts = av_rescale_q_rnd(pkt->dts, in_stream->time_base,
+	//			out_stream->time_base, AV_ROUND_NEAR_INF|AV_ROUND_PASS_MINMAX);
+	//}
 
 	pkt->duration = av_rescale_q(pkt->duration, in_stream->time_base,
 			out_stream->time_base);

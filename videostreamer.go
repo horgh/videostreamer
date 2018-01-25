@@ -388,6 +388,11 @@ func (h HTTPHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 // Read from a pipe where streaming media shows up. We read a chunk and write it
 // immediately to the client, and repeat forever (until either the client goes
 // away, or an error of some kind occurs).
+//
+// TODO: according to gdb / valgrind, this function throws thousands of
+//       read/write errors in network-related code, and causing memory
+//       leaks as well
+//
 func (h HTTPHandler) streamRequest(rw http.ResponseWriter, r *http.Request) {
 	// The encoder writes to the out pipe (using the packetWriter goroutine). We
 	// read from the in pipe.
