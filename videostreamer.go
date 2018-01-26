@@ -301,6 +301,7 @@ func destroyInput(input *Input) {
 
 	if input.vsInput != nil {
 		C.vs_destroy_input(input.vsInput)
+		input.vsInput = nil
 	}
 }
 
