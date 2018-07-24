@@ -281,7 +281,6 @@ func openInput(inputFormat, inputURL string, verbose bool) *Input {
 
 	input := C.vs_open_input(inputFormatC, inputURLC, C.bool(verbose))
 	if input == nil {
-		log.Printf("Unable to open input")
 		C.free(unsafe.Pointer(inputFormatC))
 		C.free(unsafe.Pointer(inputURLC))
 		return nil
