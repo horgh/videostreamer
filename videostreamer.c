@@ -58,9 +58,10 @@ vs_open_input(const char * const input_format_name,
 		return NULL;
 	}
 
-	if (avformat_open_input(&input->format_ctx, input_url, input_format,
-				NULL) != 0) {
-		printf("unable to open input\n");
+	int const open_status = avformat_open_input(&input->format_ctx, input_url,
+			input_format, NULL);
+	if (open_status != 0) {
+		printf("unable to open input: %s\n", av_err2str(open_status));
 		vs_destroy_input(input);
 		return NULL;
 	}
