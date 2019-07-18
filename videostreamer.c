@@ -114,8 +114,7 @@ vs_destroy_input(struct VSInput * const input)
 	}
 
 	if (input->format_ctx) {
-		avformat_close_input(&input->format_ctx);
-		avformat_free_context(input->format_ctx);
+		avformat_close_input(&input->format_ctx);		
 	}
 
 	free(input);
