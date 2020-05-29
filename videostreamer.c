@@ -26,7 +26,8 @@ vs_setup(void)
 	// Set up library.
 
 	// Register muxers, demuxers, and protocols.
-	av_register_all();
+        // Not needed in modern libav
+        //av_register_all();
 
 	// Make formats available.
 	avdevice_register_all();
