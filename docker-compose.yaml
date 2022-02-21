@@ -1,0 +1,30 @@
+version: "2.3"
+
+services:
+  rtsp2mp4:
+    container_name: videostreamer
+    image: popszer/rtsp2mp4:v0.0.1
+    build: .
+    env_file:
+      - .env
+    environment:
+      - HOST=${HOST}
+      - PORT=${PORT}
+      - FCGI=${FCGI}
+      - VERBOSE=${VERBOSE}
+      - FORMAT=${FORMAT}
+      - SOURCE_RTSP=${SOURCE_RTSP}
+    ports:
+      - "${PORT}:${PORT}"
+    command:
+      - /bin/bash
+      - -c
+      - |
+        /videostreamer -host ${HOST} \
+                       -port ${PORT} \
+                       -input ${SOURCE_RTSP} \
+                       -verbose ${VERBOSE} \
+                       -fcgi ${FCGI} \
+                       -format ${FORMAT}
+        
+        
