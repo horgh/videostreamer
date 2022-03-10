@@ -32,6 +32,21 @@ website.
 * Run the daemon. Its usage output shows the possible flags. There is no
   configuration file.
 
+## Running with docker-compose
+
+1. Copy the provided example environment file `.env.example`
+```shell
+cp .env.example .env
+```
+2. Edit the `.env` environment file with your config, especially the path towards your source input.
+
+3. Run the app with docker-compose
+```shell
+docker-compose up
+# docker-compose up --build # if you wish to rebuild the docker image
+```
+
+4. Use your favorite browser to open the `index.html` and you're good!
 
 ## Components
 * `videostreamer`: The daemon.

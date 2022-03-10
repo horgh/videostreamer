@@ -108,10 +108,10 @@ func main() {
 func getArgs() (Args, error) {
 	listenHost := flag.String("host", "0.0.0.0", "Host to listen on.")
 	listenPort := flag.Int("port", 8080, "Port to listen on.")
-	format := flag.String("format", "pulse", "Input format. Example: rtsp for RTSP.")
-	input := flag.String("input", "", "Input URL valid for the given format. For RTSP you can provide a rtsp:// URL.")
+	format := flag.String("format", "rtsp", "Input format. Example: rtsp for RTSP.")
+	input := flag.String("input", "rtsp://rtsp.stream/pattern", "Input URL valid for the given format. For RTSP you can provide a rtsp:// URL.")
 	verbose := flag.Bool("verbose", false, "Enable verbose logging output.")
-	fcgi := flag.Bool("fcgi", true, "Serve using FastCGI (true) or as a regular HTTP server.")
+	fcgiVar := flag.Bool("fcgi", false, "Serve using FastCGI (true) or as a regular HTTP server.")
 
 	flag.Parse()
 
@@ -136,7 +136,7 @@ func getArgs() (Args, error) {
 		InputFormat: *format,
 		InputURL:    *input,
 		Verbose:     *verbose,
-		FCGI:        *fcgi,
+		FCGI:        *fcgiVar,
 	}, nil
 }
 
